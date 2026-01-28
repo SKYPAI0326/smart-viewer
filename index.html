@@ -3,136 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <title>智慧觀看監測中心 V2</title>
+    <title>智慧觀看控制中心 V3</title>
     <style>
         body { font-family: 'PingFang TC', sans-serif; background: #121212; color: #e0e0e0; text-align: center; padding: 20px; }
-        #start-layer { padding: 40px; background: #1e1e1e; border-radius: 15px; border: 1px solid #333; display: inline-block; margin-top: 50px; }
-        #start-btn { padding: 20px 40px; font-size: 20px; font-weight: bold; cursor: pointer; background: #ff0000; color: white; border: none; border-radius: 50px; box-shadow: 0 4px 15px rgba(255,0,0,0.3); transition: 0.3s; }
-        #start-btn:hover { background: #cc0000; transform: scale(1.05); }
-        #player-container { margin: 20px auto; border: 4px solid #333; border-radius: 10px; overflow: hidden; display: none; line-height: 0; }
-        #status-board { background: #1e1e1e; border-radius: 10px; padding: 20px; max-width: 640px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .log { font-family: 'Courier New', monospace; font-size: 12px; color: #aaa; text-align: left; height: 150px; overflow-y: scroll; border: 1px solid #333; padding: 10px; margin-top: 15px; background: #0a0a0a; border-radius: 5px; }
-        .stat-item { margin: 10px 0; font-size: 16px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        #settings-panel { background: #1e1e1e; padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; text-align: left; }
+        input, textarea { width: 100%; padding: 10px; background: #0a0a0a; border: 1px solid #444; color: #fff; border-radius: 5px; margin-top: 5px; box-sizing: border-box; }
+        label { font-size: 14px; color: #aaa; }
+        .btn-group { margin-top: 15px; display: flex; gap: 10px; }
+        #start-btn { flex: 2; padding: 15px; font-weight: bold; cursor: pointer; background: #ff0000; color: white; border: none; border-radius: 5px; }
+        #save-btn { flex: 1; padding: 15px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #player-container { margin: 20px auto; border: 4px solid #333; border-radius: 10px; overflow: hidden; display: none; background: #000; }
+        #status-board { background: #1e1e1e; border-radius: 10px; padding: 20px; display: none; }
+        .log { font-family: 'Courier New', monospace; font-size: 12px; color: #aaa; text-align: left; height: 120px; overflow-y: scroll; border: 1px solid #333; padding: 10px; margin-top: 10px; background: #0a0a0a; }
         .highlight { color: #ff4d4d; font-weight: bold; font-size: 24px; }
-        .info { color: #4da6ff; }
     </style>
 </head>
 <body>
 
-    <h1>智慧觀看監測中心</h1>
+<div class="container">
+    <h1>智慧觀看控制中心 V3</h1>
 
-    <div id="start-layer">
-        <p>系統已就緒，請點擊按鈕授權自動播放</p>
-        <button id="start-btn" onclick="initiateSystem()">🚀 啟動自動模擬系統</button>
+    <div id="settings-panel">
+        <label>🎯 目標影片 ID (例如：DYgE3SGPEqk)</label>
+        <input type="text" id="target-id" placeholder="輸入目標影片 ID">
+        <br><br>
+        <label>🌫️ 煙霧彈影片 ID 清單 (每行一個)</label>
+        <textarea id="decoy-ids" rows="5" placeholder="輸入多個煙霧彈 ID..."></textarea>
+        
+        <div class="btn-group">
+            <button id="save-btn" onclick="saveSettings()">💾 儲存設定</button>
+            <button id="start-btn" onclick="initiateSystem()">🚀 啟動系統</button>
+        </div>
     </div>
 
-    <div id="player-container">
-        <div id="player"></div>
+    <div id="player-container"><div id="player"></div></div>
+
+    <div id="status-board">
+        <div>目前任務：<span id="state" style="color:#4da6ff">準備中...</span></div>
+        <div style="margin: 10px 0;">已累計觀看：<span id="count" class="highlight">0</span> 次</div>
+        <div id="next-info" style="color: #888; font-size: 14px;"></div>
+        <div class="log" id="log">系統就緒。</div>
     </div>
+</div>
 
-    <div id="status-board" style="display:none;">
-        <div class="stat-item">目前任務：<span id="state" class="info">準備中...</span></div>
-        <div class="stat-item">已累計觀看：<span id="count" class="highlight">0</span> 次</div>
-        <div id="next-info" class="stat-item" style="color: #888;"></div>
-        <div class="log" id="log">系統初始化中...</div>
-    </div>
+<script>
+    var tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    var firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-    <script>
-        var tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        var firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    var player, viewCount = 0;
+    
+    // 初始化載入設定
+    window.onload = function() {
+        document.getElementById('target-id').value = localStorage.getItem('yt-target') || 'DYgE3SGPEqk';
+        document.getElementById('decoy-ids').value = localStorage.getItem('yt-decoys') || "v5ew_B-Lf5E\nlmwpIRYJ_UQ\nhAONx6nuEgI\nNxRjj0RsBVg";
+    };
 
-        var player;
-        var targetId = 'DYgE3SGPEqk'; // 目標影片
-        var decoys = ['v5ew_B-Lf5E', 'lmwpIRYJ_UQ', 'hAONx6nuEgI', 'NxRjj0RsBVg']; // 煙霧彈
-        var viewCount = 0;
+    function saveSettings() {
+        localStorage.setItem('yt-target', document.getElementById('target-id').value.trim());
+        localStorage.setItem('yt-decoys', document.getElementById('decoy-ids').value.trim());
+        alert("設定已儲存於瀏覽器中！");
+    }
 
-        function initiateSystem() {
-            document.getElementById('start-layer').style.display = 'none';
-            document.getElementById('player-container').style.display = 'block';
-            document.getElementById('status-board').style.display = 'block';
-            loadNextVideo();
+    function initiateSystem() {
+        const target = document.getElementById('target-id').value.trim();
+        const decoys = document.getElementById('decoy-ids').value.trim().split('\n');
+        
+        if(!target) return alert("請輸入目標影片 ID");
+        
+        document.getElementById('settings-panel').style.display = 'none';
+        document.getElementById('player-container').style.display = 'block';
+        document.getElementById('status-board').style.display = 'block';
+        
+        loadVideo(target, decoys);
+    }
+
+    function loadVideo(target, decoys) {
+        var isTarget = Math.random() > 0.33;
+        var currentId = isTarget ? target : decoys[Math.floor(Math.random() * decoys.length)].trim();
+        
+        if (player && player.loadVideoById) {
+            player.loadVideoById(currentId);
+        } else {
+            player = new YT.Player('player', {
+                height: '360', width: '100%', videoId: currentId,
+                playerVars: { 'autoplay': 1, 'controls': 1, 'origin': window.location.origin },
+                events: { 'onReady': onPlayerReady, 'onStateChange': (e) => onPlayerStateChange(e, target, decoys) }
+            });
         }
+        document.getElementById('state').innerText = isTarget ? "護航目標中" : "投放煙霧彈中";
+        addLog("🎬 載入影片：" + currentId);
+    }
 
-        function loadNextVideo() {
-            var isTarget = Math.random() > 0.33; 
-            var currentVideoId = isTarget ? targetId : decoys[Math.floor(Math.random() * decoys.length)];
-            
-            if (player && player.loadVideoById) {
-                player.loadVideoById(currentVideoId);
-                addLog("🔄 切換內容：" + (isTarget ? "【目標】" : "【煙霧彈】") + " " + currentVideoId);
-            } else {
-                player = new YT.Player('player', {
-                    height: '360', width: '640',
-                    videoId: currentVideoId,
-                    playerVars: { 
-                        'autoplay': 1, 
-                        'controls': 1, 
-                        'mute': 0,
-                        'origin': window.location.origin
-                    },
-                    events: { 
-                        'onReady': onPlayerReady, 
-                        'onStateChange': onPlayerStateChange,
-                        'onError': onPlayerError 
-                    }
-                });
-            }
-            document.getElementById('state').innerText = isTarget ? "正在護航目標影片" : "正在播放隨機煙霧彈";
-        }
+    function onPlayerReady(e) { 
+        var rate = (Math.random() > 0.5) ? 1.0 : 1.05;
+        e.target.setPlaybackRate(rate);
+        e.target.playVideo(); 
+    }
 
-        function onPlayerReady(event) {
-            applyRandomSettings();
-            event.target.playVideo();
-        }
-
-        function onPlayerStateChange(event) {
-            if (event.data == YT.PlayerState.ENDED) {
-                viewCount++;
-                document.getElementById('count').innerText = viewCount;
-                var waitTime = Math.floor(Math.random() * (150 - 45 + 1) + 45); 
-                document.getElementById('state').innerText = "擬人化冷卻中...";
-                startCountdown(waitTime);
-            }
-        }
-
-        function startCountdown(seconds) {
-            var remaining = seconds;
-            var timer = setInterval(function() {
-                document.getElementById('next-info').innerText = "⏳ 距離下一次模擬還剩 " + remaining + " 秒...";
-                remaining--;
-                if (remaining < 0) {
+    function onPlayerStateChange(event, target, decoys) {
+        if (event.data == YT.PlayerState.ENDED) {
+            viewCount++;
+            document.getElementById('count').innerText = viewCount;
+            var wait = Math.floor(Math.random() * (120 - 45 + 1) + 45);
+            var remaining = wait;
+            var timer = setInterval(() => {
+                document.getElementById('next-info').innerText = "⏳ " + remaining + " 秒後繼續下一次模擬...";
+                if (remaining-- <= 0) {
                     clearInterval(timer);
-                    document.getElementById('next-info').innerText = "";
-                    loadNextVideo();
+                    loadVideo(target, decoys);
                 }
             }, 1000);
         }
+    }
 
-        function applyRandomSettings() {
-            if (!player) return;
-            var rate = (Math.random() > 0.5) ? 1.0 : 1.05;
-            var vol = Math.floor(Math.random() * (95 - 65 + 1) + 65);
-            player.setPlaybackRate(rate);
-            player.setVolume(vol);
-            addLog("⚙️ 模擬參數：速率 " + rate + "x, 音量 " + vol + "%");
-        }
-
-        function onPlayerError(e) {
-            addLog("⚠️ 播放器異常 (代碼 " + e.data + ")，5秒後嘗試自動修復...");
-            setTimeout(loadNextVideo, 5000);
-        }
-
-        function addLog(text) {
-            var log = document.getElementById('log');
-            log.innerHTML += "<div>[" + new Date().toLocaleTimeString() + "] " + text + "</div>";
-            log.scrollTop = log.scrollHeight;
-        }
-
-        function onYouTubeIframeAPIReady() {
-            addLog("✅ YouTube API 加載完成，等待啟動...");
-        }
-    </script>
+    function addLog(t) {
+        const l = document.getElementById('log');
+        l.innerHTML += "<div>[" + new Date().toLocaleTimeString() + "] " + t + "</div>";
+        l.scrollTop = l.scrollHeight;
+    }
+</script>
 </body>
 </html>
