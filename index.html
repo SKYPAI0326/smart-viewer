@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>智慧觀看儀表板 (修正版)</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: #eee; text-align: center; padding: 20px; }
+        #player-container { margin-bottom: 20px; border: 2px solid #333; display: inline-block; }
+        #status-board { background: #2a2a2a; border-radius: 10px; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .log { font-family: monospace; font-size: 11px; color: #888; text-align: left; height: 120px; overflow-y: scroll; border: 1px solid #444; padding: 10px; margin-top: 10px; }
+        .highlight { color: #ff0000; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>智慧觀看監測中心</h1>
+    <div id="player-container">
+        <div id="player"></div>
+    </div>
+
+    <div id="status-board">
+        <div>目前狀態：<span id="state">正在啟動虛擬環境...</span></div>
+        <div>已模擬觀看次數：<span id="count" class="highlight">0</span> 次</div>
+        <div id="next-info"></div>
+        <div class="log" id="log">系統日誌準備中...</div>
+    </div>
+
+    <script>
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        var player;
+        var targetId = 'DYgE3SGPEqk'; 
+        var decoys = ['v5ew_B-Lf5E', 'lmwpIRYJ_UQ', 'hAONx6nuEgI', 'NxRjj0RsBVg']; 
+        var viewCount = 0;
+
+        function loadNext() {
+            var isTarget = Math.random() > 0.33;
+            var currentVideoId = isTarget ? targetId : decoys[Math.floor(Math.random() * decoys.length)];
+            
+            if (player && player.loadVideoById) {
+                player.loadVideoById(currentVideoId);
+            } else {
+                player = new YT.Player('player', {
+                    height: '360', width: '640',
+                    videoId: currentVideoId,
+                    playerVars: { 
+                        'autoplay': 1, 
+                        'controls': 1, 
+                        'mute': 0,
+                        // 修正關鍵 2: 使用 no-cookie 網域並指定 origin
+                        'origin': window.location.origin || 'http://localhost' 
+                    },
+                    events: { 'onStateChange': onPlayerStateChange, 'onReady': onPlayerReady, 'onError': onPlayerError }
+                });
+            }
+            updateStatus(isTarget ? "播放目標影片" : "播放煙霧彈中", currentVideoId);
+        }
+
+        function onYouTubeIframeAPIReady() { loadNext(); }
+        function onPlayerReady(event) { randomizeSettings(); event.target.playVideo(); }
+        function onPlayerError(e) { addLog("<span style='color:orange;'>偵測到播放限制，嘗試重啟...</span>"); setTimeout(loadNext, 5000); }
+
+        function onPlayerStateChange(event) {
+            if (event.data == YT.PlayerState.ENDED) {
+                viewCount++;
+                document.getElementById('count').innerText = viewCount;
+                var waitTime = Math.floor(Math.random() * (120 - 45 + 1) + 45); 
+                document.getElementById('state').innerText = "進入擬人化休息期...";
+                document.getElementById('next-info').innerText = waitTime + " 秒後繼續...";
+                setTimeout(loadNext, waitTime * 1000);
+            }
+        }
+
+        function randomizeSettings() {
+            if (!player) return;
+            var randomRate = (Math.random() > 0.5) ? 1.0 : 1.05;
+            var randomVol = Math.floor(Math.random() * (90 - 60 + 1) + 60);
+            player.setPlaybackRate(randomRate);
+            player.setVolume(randomVol);
+            addLog("模擬參數：速率 " + randomRate + "x, 音量 " + randomVol + "%");
+        }
+
+        function updateStatus(msg, id) { document.getElementById('state').innerText = msg; addLog("載入內容：" + id); }
+        function addLog(text) {
+            var log = document.getElementById('log');
+            log.innerHTML += "<div>[" + new Date().toLocaleTimeString() + "] " + text + "</div>";
+            log.scrollTop = log.scrollHeight;
+        }
+    </script>
+</body>
+</html>
