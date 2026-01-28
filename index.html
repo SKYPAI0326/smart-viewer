@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <title>智慧觀看控制中心 V3</title>
+    <title>智慧觀看控制中心 V4</title>
     <style>
         body { font-family: 'PingFang TC', sans-serif; background: #121212; color: #e0e0e0; text-align: center; padding: 20px; }
         .container { max-width: 800px; margin: 0 auto; }
         #settings-panel { background: #1e1e1e; padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; text-align: left; }
         input, textarea { width: 100%; padding: 10px; background: #0a0a0a; border: 1px solid #444; color: #fff; border-radius: 5px; margin-top: 5px; box-sizing: border-box; }
-        label { font-size: 14px; color: #aaa; }
         .btn-group { margin-top: 15px; display: flex; gap: 10px; }
         #start-btn { flex: 2; padding: 15px; font-weight: bold; cursor: pointer; background: #ff0000; color: white; border: none; border-radius: 5px; }
         #save-btn { flex: 1; padding: 15px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer; }
@@ -22,15 +21,13 @@
 <body>
 
 <div class="container">
-    <h1>智慧觀看控制中心 V3</h1>
-
+    <h1>智慧觀看控制中心 V4 (背景強化)</h1>
     <div id="settings-panel">
-        <label>🎯 目標影片 ID (例如：DYgE3SGPEqk)</label>
-        <input type="text" id="target-id" placeholder="輸入目標影片 ID">
+        <label>🎯 目標影片 ID</label>
+        <input type="text" id="target-id">
         <br><br>
-        <label>🌫️ 煙霧彈影片 ID 清單 (每行一個)</label>
-        <textarea id="decoy-ids" rows="5" placeholder="輸入多個煙霧彈 ID..."></textarea>
-        
+        <label>🌫️ 煙霧彈 ID 清單 (每行一個)</label>
+        <textarea id="decoy-ids" rows="5"></textarea>
         <div class="btn-group">
             <button id="save-btn" onclick="saveSettings()">💾 儲存設定</button>
             <button id="start-btn" onclick="initiateSystem()">🚀 啟動系統</button>
@@ -40,14 +37,36 @@
     <div id="player-container"><div id="player"></div></div>
 
     <div id="status-board">
-        <div>目前任務：<span id="state" style="color:#4da6ff">準備中...</span></div>
-        <div style="margin: 10px 0;">已累計觀看：<span id="count" class="highlight">0</span> 次</div>
-        <div id="next-info" style="color: #888; font-size: 14px;"></div>
+        <div>任務：<span id="state" style="color:#4da6ff">準備中...</span></div>
+        <div style="margin: 10px 0;">累積觀看：<span id="count" class="highlight">0</span> 次</div>
+        <div id="next-info" style="color: #888; font-size: 14px;">等待啟動...</div>
         <div class="log" id="log">系統就緒。</div>
     </div>
 </div>
 
 <script>
+    // 建立背景計時器 Web Worker (防止背景分頁被停用)
+    const workerCode = `
+        let timer;
+        self.onmessage = function(e) {
+            if (e.data.action === 'start') {
+                let remaining = e.data.seconds;
+                timer = setInterval(() => {
+                    remaining--;
+                    self.postMessage({ action: 'tick', remaining: remaining });
+                    if (remaining <= 0) {
+                        clearInterval(timer);
+                        self.postMessage({ action: 'done' });
+                    }
+                }, 1000);
+            } else if (e.data.action === 'stop') {
+                clearInterval(timer);
+            }
+        };
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const timerWorker = new Worker(URL.createObjectURL(blob));
+
     var tag = document.createElement('script');
     tag.src = "https://www.youtube.com/iframe_api";
     var firstScriptTag = document.getElementsByTagName('script')[0];
@@ -55,7 +74,6 @@
 
     var player, viewCount = 0;
     
-    // 初始化載入設定
     window.onload = function() {
         document.getElementById('target-id').value = localStorage.getItem('yt-target') || 'DYgE3SGPEqk';
         document.getElementById('decoy-ids').value = localStorage.getItem('yt-decoys') || "v5ew_B-Lf5E\nlmwpIRYJ_UQ\nhAONx6nuEgI\nNxRjj0RsBVg";
@@ -64,23 +82,19 @@
     function saveSettings() {
         localStorage.setItem('yt-target', document.getElementById('target-id').value.trim());
         localStorage.setItem('yt-decoys', document.getElementById('decoy-ids').value.trim());
-        alert("設定已儲存於瀏覽器中！");
+        alert("設定已儲存！");
     }
 
     function initiateSystem() {
-        const target = document.getElementById('target-id').value.trim();
-        const decoys = document.getElementById('decoy-ids').value.trim().split('\n');
-        
-        if(!target) return alert("請輸入目標影片 ID");
-        
         document.getElementById('settings-panel').style.display = 'none';
         document.getElementById('player-container').style.display = 'block';
         document.getElementById('status-board').style.display = 'block';
-        
-        loadVideo(target, decoys);
+        loadVideo();
     }
 
-    function loadVideo(target, decoys) {
+    function loadVideo() {
+        const target = document.getElementById('target-id').value.trim();
+        const decoys = document.getElementById('decoy-ids').value.trim().split('\n');
         var isTarget = Math.random() > 0.33;
         var currentId = isTarget ? target : decoys[Math.floor(Math.random() * decoys.length)].trim();
         
@@ -90,34 +104,37 @@
             player = new YT.Player('player', {
                 height: '360', width: '100%', videoId: currentId,
                 playerVars: { 'autoplay': 1, 'controls': 1, 'origin': window.location.origin },
-                events: { 'onReady': onPlayerReady, 'onStateChange': (e) => onPlayerStateChange(e, target, decoys) }
+                events: { 
+                    'onReady': (e) => { e.target.playVideo(); }, 
+                    'onStateChange': onPlayerStateChange 
+                }
             });
         }
         document.getElementById('state').innerText = isTarget ? "護航目標中" : "投放煙霧彈中";
-        addLog("🎬 載入影片：" + currentId);
+        addLog("🎬 載入：" + currentId);
     }
 
-    function onPlayerReady(e) { 
-        var rate = (Math.random() > 0.5) ? 1.0 : 1.05;
-        e.target.setPlaybackRate(rate);
-        e.target.playVideo(); 
-    }
-
-    function onPlayerStateChange(event, target, decoys) {
+    function onPlayerStateChange(event) {
         if (event.data == YT.PlayerState.ENDED) {
             viewCount++;
             document.getElementById('count').innerText = viewCount;
-            var wait = Math.floor(Math.random() * (120 - 45 + 1) + 45);
-            var remaining = wait;
-            var timer = setInterval(() => {
-                document.getElementById('next-info').innerText = "⏳ " + remaining + " 秒後繼續下一次模擬...";
-                if (remaining-- <= 0) {
-                    clearInterval(timer);
-                    loadVideo(target, decoys);
-                }
-            }, 1000);
+            var wait = Math.floor(Math.random() * (120 - 45) + 45);
+            addLog("✅ 觀看完成，開始背景冷卻...");
+            
+            // 啟動背景 Worker 計時
+            timerWorker.postMessage({ action: 'start', seconds: wait });
         }
     }
+
+    // 監聽背景計時器的回傳
+    timerWorker.onmessage = function(e) {
+        if (e.data.action === 'tick') {
+            document.getElementById('next-info').innerText = "⏳ 背景倒數中：還剩 " + e.data.remaining + " 秒...";
+        } else if (e.data.action === 'done') {
+            document.getElementById('next-info').innerText = "🚀 冷卻結束，啟動下一波...";
+            loadVideo();
+        }
+    };
 
     function addLog(t) {
         const l = document.getElementById('log');
