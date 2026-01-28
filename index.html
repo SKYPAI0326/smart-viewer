@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <title>智慧觀看控制中心 V4</title>
+    <title>智慧觀看控制中心 V4.1</title>
     <style>
         body { font-family: 'PingFang TC', sans-serif; background: #121212; color: #e0e0e0; text-align: center; padding: 20px; }
         .container { max-width: 800px; margin: 0 auto; }
@@ -21,7 +21,7 @@
 <body>
 
 <div class="container">
-    <h1>智慧觀看控制中心 V4 (背景強化)</h1>
+    <h1>智慧觀看控制中心 V4.1</h1>
     <div id="settings-panel">
         <label>🎯 目標影片 ID</label>
         <input type="text" id="target-id">
@@ -39,13 +39,13 @@
     <div id="status-board">
         <div>任務：<span id="state" style="color:#4da6ff">準備中...</span></div>
         <div style="margin: 10px 0;">累積觀看：<span id="count" class="highlight">0</span> 次</div>
-        <div id="next-info" style="color: #888; font-size: 14px;">等待啟動...</div>
+        <div id="next-info" style="color: #888; font-size: 14px;">等待指令...</div>
         <div class="log" id="log">系統就緒。</div>
     </div>
 </div>
 
 <script>
-    // 建立背景計時器 Web Worker (防止背景分頁被停用)
+    // 背景計時 Web Worker
     const workerCode = `
         let timer;
         self.onmessage = function(e) {
@@ -95,7 +95,7 @@
     function loadVideo() {
         const target = document.getElementById('target-id').value.trim();
         const decoys = document.getElementById('decoy-ids').value.trim().split('\n');
-        var isTarget = Math.random() > 0.33;
+        var isTarget = Math.random() > 0.33; // 2:1 權重
         var currentId = isTarget ? target : decoys[Math.floor(Math.random() * decoys.length)].trim();
         
         if (player && player.loadVideoById) {
@@ -105,33 +105,47 @@
                 height: '360', width: '100%', videoId: currentId,
                 playerVars: { 'autoplay': 1, 'controls': 1, 'origin': window.location.origin },
                 events: { 
-                    'onReady': (e) => { e.target.playVideo(); }, 
+                    'onReady': onPlayerReady, 
                     'onStateChange': onPlayerStateChange 
                 }
             });
         }
         document.getElementById('state').innerText = isTarget ? "護航目標中" : "投放煙霧彈中";
-        addLog("🎬 載入：" + currentId);
+        addLog("🎬 載入影片：" + currentId);
+    }
+
+    function onPlayerReady(event) {
+        applyRandomSettings(event.target);
+        event.target.playVideo();
+    }
+
+    function applyRandomSettings(p) {
+        // 擬人化細節回歸：隨機倍速 (1.0x 或 1.05x)
+        var rate = (Math.random() > 0.5) ? 1.0 : 1.05;
+        // 隨機音量 (60% ~ 95%)，避開 0 靜音
+        var vol = Math.floor(Math.random() * (95 - 60 + 1) + 60);
+        
+        p.setPlaybackRate(rate);
+        p.setVolume(vol);
+        addLog("⚙️ 擬人參數：倍速 " + rate + "x, 音量 " + vol + "%");
     }
 
     function onPlayerStateChange(event) {
         if (event.data == YT.PlayerState.ENDED) {
             viewCount++;
             document.getElementById('count').innerText = viewCount;
+            // 隨機冷卻時間：45 到 120 秒
             var wait = Math.floor(Math.random() * (120 - 45) + 45);
-            addLog("✅ 觀看完成，開始背景冷卻...");
-            
-            // 啟動背景 Worker 計時
+            addLog("✅ 完成觀看，背景冷卻中...");
             timerWorker.postMessage({ action: 'start', seconds: wait });
         }
     }
 
-    // 監聽背景計時器的回傳
     timerWorker.onmessage = function(e) {
         if (e.data.action === 'tick') {
             document.getElementById('next-info').innerText = "⏳ 背景倒數中：還剩 " + e.data.remaining + " 秒...";
         } else if (e.data.action === 'done') {
-            document.getElementById('next-info').innerText = "🚀 冷卻結束，啟動下一波...";
+            document.getElementById('next-info').innerText = "🚀 冷卻結束...";
             loadVideo();
         }
     };
