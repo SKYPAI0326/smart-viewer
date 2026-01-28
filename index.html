@@ -3,27 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <title>智慧觀看儀表板 (修正版)</title>
+    <title>智慧觀看監測中心 V2</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: #eee; text-align: center; padding: 20px; }
-        #player-container { margin-bottom: 20px; border: 2px solid #333; display: inline-block; }
-        #status-board { background: #2a2a2a; border-radius: 10px; padding: 20px; max-width: 600px; margin: 0 auto; }
-        .log { font-family: monospace; font-size: 11px; color: #888; text-align: left; height: 120px; overflow-y: scroll; border: 1px solid #444; padding: 10px; margin-top: 10px; }
-        .highlight { color: #ff0000; font-weight: bold; }
+        body { font-family: 'PingFang TC', sans-serif; background: #121212; color: #e0e0e0; text-align: center; padding: 20px; }
+        #start-layer { padding: 40px; background: #1e1e1e; border-radius: 15px; border: 1px solid #333; display: inline-block; margin-top: 50px; }
+        #start-btn { padding: 20px 40px; font-size: 20px; font-weight: bold; cursor: pointer; background: #ff0000; color: white; border: none; border-radius: 50px; box-shadow: 0 4px 15px rgba(255,0,0,0.3); transition: 0.3s; }
+        #start-btn:hover { background: #cc0000; transform: scale(1.05); }
+        #player-container { margin: 20px auto; border: 4px solid #333; border-radius: 10px; overflow: hidden; display: none; line-height: 0; }
+        #status-board { background: #1e1e1e; border-radius: 10px; padding: 20px; max-width: 640px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .log { font-family: 'Courier New', monospace; font-size: 12px; color: #aaa; text-align: left; height: 150px; overflow-y: scroll; border: 1px solid #333; padding: 10px; margin-top: 15px; background: #0a0a0a; border-radius: 5px; }
+        .stat-item { margin: 10px 0; font-size: 16px; }
+        .highlight { color: #ff4d4d; font-weight: bold; font-size: 24px; }
+        .info { color: #4da6ff; }
     </style>
 </head>
 <body>
 
     <h1>智慧觀看監測中心</h1>
+
+    <div id="start-layer">
+        <p>系統已就緒，請點擊按鈕授權自動播放</p>
+        <button id="start-btn" onclick="initiateSystem()">🚀 啟動自動模擬系統</button>
+    </div>
+
     <div id="player-container">
         <div id="player"></div>
     </div>
 
-    <div id="status-board">
-        <div>目前狀態：<span id="state">正在啟動虛擬環境...</span></div>
-        <div>已模擬觀看次數：<span id="count" class="highlight">0</span> 次</div>
-        <div id="next-info"></div>
-        <div class="log" id="log">系統日誌準備中...</div>
+    <div id="status-board" style="display:none;">
+        <div class="stat-item">目前任務：<span id="state" class="info">準備中...</span></div>
+        <div class="stat-item">已累計觀看：<span id="count" class="highlight">0</span> 次</div>
+        <div id="next-info" class="stat-item" style="color: #888;"></div>
+        <div class="log" id="log">系統初始化中...</div>
     </div>
 
     <script>
@@ -37,12 +48,21 @@
         var decoys = ['v5ew_B-Lf5E', 'lmwpIRYJ_UQ', 'hAONx6nuEgI', 'NxRjj0RsBVg']; 
         var viewCount = 0;
 
-        function loadNext() {
-            var isTarget = Math.random() > 0.33;
+        // 由按鈕觸發的啟動函式
+        function initiateSystem() {
+            document.getElementById('start-layer').style.display = 'none';
+            document.getElementById('player-container').style.display = 'block';
+            document.getElementById('status-board').style.display = 'block';
+            loadNextVideo();
+        }
+
+        function loadNextVideo() {
+            var isTarget = Math.random() > 0.33; // 2:1 權重
             var currentVideoId = isTarget ? targetId : decoys[Math.floor(Math.random() * decoys.length)];
             
             if (player && player.loadVideoById) {
                 player.loadVideoById(currentVideoId);
+                addLog("🔄 切換內容：" + (isTarget ? "【目標】" : "【煙霧彈】") + " " + currentVideoId);
             } else {
                 player = new YT.Player('player', {
                     height: '360', width: '640',
@@ -51,44 +71,76 @@
                         'autoplay': 1, 
                         'controls': 1, 
                         'mute': 0,
-                        // 修正關鍵 2: 使用 no-cookie 網域並指定 origin
-                        'origin': window.location.origin || 'http://localhost' 
+                        'rel': 0,
+                        'origin': window.location.origin
                     },
-                    events: { 'onStateChange': onPlayerStateChange, 'onReady': onPlayerReady, 'onError': onPlayerError }
+                    events: { 
+                        'onReady': onPlayerReady, 
+                        'onStateChange': onPlayerStateChange,
+                        'onError': onPlayerError 
+                    }
                 });
             }
-            updateStatus(isTarget ? "播放目標影片" : "播放煙霧彈中", currentVideoId);
+            document.getElementById('state').innerText = isTarget ? "正在護航目標影片" : "正在播放隨機煙霧彈";
         }
 
-        function onYouTubeIframeAPIReady() { loadNext(); }
-        function onPlayerReady(event) { randomizeSettings(); event.target.playVideo(); }
-        function onPlayerError(e) { addLog("<span style='color:orange;'>偵測到播放限制，嘗試重啟...</span>"); setTimeout(loadNext, 5000); }
+        function onPlayerReady(event) {
+            applyRandomSettings();
+            event.target.playVideo();
+        }
 
         function onPlayerStateChange(event) {
+            // 影片結束 (State = 0)
             if (event.data == YT.PlayerState.ENDED) {
                 viewCount++;
                 document.getElementById('count').innerText = viewCount;
-                var waitTime = Math.floor(Math.random() * (120 - 45 + 1) + 45); 
-                document.getElementById('state').innerText = "進入擬人化休息期...";
-                document.getElementById('next-info').innerText = waitTime + " 秒後繼續...";
-                setTimeout(loadNext, waitTime * 1000);
+                
+                // 模擬人類選歌空檔：45 到 150 秒
+                var waitTime = Math.floor(Math.random() * (150 - 45 + 1) + 45); 
+                document.getElementById('state').innerText = "擬人化冷卻中...";
+                
+                startCountdown(waitTime);
             }
         }
 
-        function randomizeSettings() {
-            if (!player) return;
-            var randomRate = (Math.random() > 0.5) ? 1.0 : 1.05;
-            var randomVol = Math.floor(Math.random() * (90 - 60 + 1) + 60);
-            player.setPlaybackRate(randomRate);
-            player.setVolume(randomVol);
-            addLog("模擬參數：速率 " + randomRate + "x, 音量 " + randomVol + "%");
+        function startCountdown(seconds) {
+            var remaining = seconds;
+            var timer = setInterval(function() {
+                document.getElementById('next-info').innerText = "⏳ 距離下一次模擬還剩 " + remaining + " 秒...";
+                remaining--;
+                if (remaining < 0) {
+                    clearInterval(timer);
+                    document.getElementById('next-info').innerText = "";
+                    loadNextVideo();
+                }
+            }, 1000);
         }
 
-        function updateStatus(msg, id) { document.getElementById('state').innerText = msg; addLog("載入內容：" + id); }
+        function applyRandomSettings() {
+            if (!player) return;
+            // 隨機倍速 (1.0x 或 1.05x)
+            var rate = (Math.random() > 0.5) ? 1.0 : 1.05;
+            // 隨機音量 (65% ~ 95%)
+            var vol = Math.floor(Math.random() * (95 - 65 + 1) + 65);
+            
+            player.setPlaybackRate(rate);
+            player.setVolume(vol);
+            addLog("⚙️ 模擬參數：倍速 " + rate + "x, 音量 " + vol + "%");
+        }
+
+        function onPlayerError(e) {
+            addLog("⚠️ 播放器異常 (代碼 " + e.data + ")，5秒後嘗試自動修復...");
+            setTimeout(loadNextVideo, 5000);
+        }
+
         function addLog(text) {
             var log = document.getElementById('log');
             log.innerHTML += "<div>[" + new Date().toLocaleTimeString() + "] " + text + "</div>";
             log.scrollTop = log.scrollHeight;
+        }
+
+        function onYouTubeIframeAPIReady() {
+            addLog("✅ YouTube API 加載完成，等待啟動...");
         }
     </script>
 </body>
