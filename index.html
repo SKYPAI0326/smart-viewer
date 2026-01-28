@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <title>智慧觀看控制中心 V4.3 (Security Edition)</title>
+    <title>智慧觀看控制中心 V4.4 (Stable)</title>
     <style>
         body { font-family: 'PingFang TC', sans-serif; background: #121212; color: #e0e0e0; text-align: center; padding: 20px; }
         .container { max-width: 800px; margin: 0 auto; }
@@ -21,7 +21,7 @@
 <body>
 
 <div class="container">
-    <h1>智慧觀看控制中心 V4.3</h1>
+    <h1>智慧觀看控制中心 V4.4</h1>
     <div id="settings-panel">
         <label>🎯 目標影片 ID</label>
         <input type="text" id="target-id">
@@ -30,26 +30,26 @@
         <textarea id="decoy-ids" rows="5"></textarea>
         <div class="btn-group">
             <button id="save-btn" onclick="saveSettings()">💾 儲存設定</button>
-            <button id="start-btn" onclick="initiateSystem()">🚀 啟動高度擬人系統</button>
+            <button id="start-btn" onclick="initiateSystem()">🚀 啟動穩定系統</button>
         </div>
     </div>
 
     <div id="player-container"><div id="player"></div></div>
 
     <div id="status-board">
-        <div>狀態：<span id="state" style="color:#4da6ff">準備中...</span></div>
+        <div>任務：<span id="state" style="color:#4da6ff">等待中</span></div>
         <div style="margin: 10px 0;">累積有效觀看：<span id="count" class="highlight">0</span> 次</div>
-        <div id="next-info" style="color: #888; font-size: 14px;">等待指令...</div>
-        <div class="log" id="log">系統就緒。</div>
+        <div id="next-info" style="color: #888; font-size: 14px;">系統就緒</div>
+        <div class="log" id="log">準備啟動...</div>
     </div>
 </div>
 
 <script>
-    // 背景計時 Worker
     const workerCode = `
         let timer;
         self.onmessage = function(e) {
             if (e.data.action === 'start') {
+                clearInterval(timer);
                 let remaining = e.data.seconds;
                 timer = setInterval(() => {
                     remaining--;
@@ -70,11 +70,11 @@
     var firstScriptTag = document.getElementsByTagName('script')[0];
     firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-    var player, viewCount = 0, watchTimer;
+    var player, viewCount = 0, watchTimer, isProcessing = false;
     
     window.onload = function() {
         document.getElementById('target-id').value = localStorage.getItem('yt-target') || 'DYgE3SGPEqk';
-        document.getElementById('decoy-ids').value = localStorage.getItem('yt-decoys') || "v5ew_B-Lf5E\nlmwpIRYJ_UQ";
+        document.getElementById('decoy-ids').value = localStorage.getItem('yt-decoys') || "v5ew_B-Lf5E";
     };
 
     function saveSettings() {
@@ -91,10 +91,9 @@
     }
 
     function loadVideo() {
+        isProcessing = false; // 重置鎖定狀態
         const target = document.getElementById('target-id').value.trim();
         const decoys = document.getElementById('decoy-ids').value.trim().split('\n');
-        
-        // 擬人化改進：動態權重 (隨機 25%~45% 煙霧彈比例)
         var threshold = Math.random() * (0.45 - 0.25) + 0.25;
         var isTarget = Math.random() > threshold;
         var currentId = isTarget ? target : decoys[Math.floor(Math.random() * decoys.length)].trim();
@@ -116,62 +115,67 @@
         addLog("🎬 載入：" + currentId);
     }
 
-    function applyRandomSettings(p) {
-        var rate = (Math.random() > 0.6) ? 1.0 : 1.05;
-        var vol = Math.floor(Math.random() * (90 - 40) + 40); // 擴大音量隨機範圍
-        p.setPlaybackRate(rate);
-        p.setVolume(vol);
-        addLog("⚙️ 參數：倍速 " + rate + "x, 音量 " + vol + "%");
-    }
-
     function onPlayerStateChange(event) {
-        if (event.data == YT.PlayerState.PLAYING) {
+        if (event.data == YT.PlayerState.PLAYING && !isProcessing) {
+            const duration = event.target.getDuration();
+            
+            // 安全檢查：如果長度還沒讀到，2秒後重試
+            if (duration <= 0) {
+                setTimeout(() => onPlayerStateChange(event), 2000);
+                return;
+            }
+
+            isProcessing = true; // 鎖定，防止重複觸發
             applyRandomSettings(event.target);
             
-            // 核心擬人化：隨機觀看時長 (82% ~ 98% 總長，避免永遠播完)
+            const watchPercent = Math.random() * (0.95 - 0.85) + 0.85;
+            const watchMs = duration * watchPercent * 1000;
+            
+            addLog("⏳ 預計觀看 " + Math.round(watchPercent*100) + "% 後切換");
+            
             clearTimeout(watchTimer);
-            const duration = event.target.getDuration();
-            if (duration > 0) {
-                const watchPercent = Math.random() * (0.98 - 0.82) + 0.82;
-                const watchMs = duration * watchPercent * 1000;
-                addLog("⏳ 預計觀看 " + Math.round(watchPercent*100) + "% 後自動切換");
-                watchTimer = setTimeout(() => {
-                    handleViewDone();
-                }, watchMs);
-            }
-        }
-        // 如果影片提早結束，也要觸發
-        if (event.data == YT.PlayerState.ENDED) {
-            handleViewDone();
+            watchTimer = setTimeout(() => {
+                handleViewDone();
+            }, watchMs);
         }
     }
 
     function handleViewDone() {
-        clearTimeout(watchTimer);
+        if (player) player.stopVideo();
         viewCount++;
         document.getElementById('count').innerText = viewCount;
-        var wait = Math.floor(Math.random() * (150 - 30) + 30); // 擴大冷卻範圍 30-150s
-        addLog("✅ 觀看達標，開始冷卻...");
+        var wait = Math.floor(Math.random() * (150 - 60) + 60); 
+        addLog("✅ 達標，進入冷卻 " + wait + " 秒...");
         timerWorker.postMessage({ action: 'start', seconds: wait });
     }
 
     function onPlayerError(e) {
-        addLog("❌ 播放錯誤(代碼 " + e.data + ")，60秒後跳過...");
-        timerWorker.postMessage({ action: 'start', seconds: 60 });
+        addLog("❌ 錯誤代碼 " + e.data + "，準備跳過...");
+        handleViewDone();
+    }
+
+    function applyRandomSettings(p) {
+        var rate = (Math.random() > 0.7) ? 1.0 : 1.05;
+        var vol = Math.floor(Math.random() * (90 - 50) + 50);
+        p.setPlaybackRate(rate);
+        p.setVolume(vol);
+        addLog("⚙️ 參數：倍速 " + rate + "x, 音量 " + vol + "%");
     }
 
     timerWorker.onmessage = function(e) {
         if (e.data.action === 'tick') {
             document.getElementById('next-info').innerText = "⏳ 冷卻倒數：剩 " + e.data.remaining + " 秒...";
         } else if (e.data.action === 'done') {
+            document.getElementById('next-info').innerText = "🚀 冷卻結束，換片中...";
             loadVideo();
         }
     };
 
     function addLog(t) {
         const l = document.getElementById('log');
-        l.innerHTML += "<div>[" + new Date().toLocaleTimeString() + "] " + t + "</div>";
-        // 記憶體保護：限制 Log 顯示 50 行
+        const entry = document.createElement('div');
+        entry.innerText = "[" + new Date().toLocaleTimeString() + "] " + t;
+        l.appendChild(entry);
         while (l.children.length > 50) { l.removeChild(l.firstChild); }
         l.scrollTop = l.scrollHeight;
     }
