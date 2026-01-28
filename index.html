@@ -44,11 +44,10 @@
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
         var player;
-        var targetId = 'DYgE3SGPEqk'; 
-        var decoys = ['v5ew_B-Lf5E', 'lmwpIRYJ_UQ', 'hAONx6nuEgI', 'NxRjj0RsBVg']; 
+        var targetId = 'DYgE3SGPEqk'; // 目標影片
+        var decoys = ['v5ew_B-Lf5E', 'lmwpIRYJ_UQ', 'hAONx6nuEgI', 'NxRjj0RsBVg']; // 煙霧彈
         var viewCount = 0;
 
-        // 由按鈕觸發的啟動函式
         function initiateSystem() {
             document.getElementById('start-layer').style.display = 'none';
             document.getElementById('player-container').style.display = 'block';
@@ -57,7 +56,7 @@
         }
 
         function loadNextVideo() {
-            var isTarget = Math.random() > 0.33; // 2:1 權重
+            var isTarget = Math.random() > 0.33; 
             var currentVideoId = isTarget ? targetId : decoys[Math.floor(Math.random() * decoys.length)];
             
             if (player && player.loadVideoById) {
@@ -71,7 +70,6 @@
                         'autoplay': 1, 
                         'controls': 1, 
                         'mute': 0,
-                        'rel': 0,
                         'origin': window.location.origin
                     },
                     events: { 
@@ -90,15 +88,11 @@
         }
 
         function onPlayerStateChange(event) {
-            // 影片結束 (State = 0)
             if (event.data == YT.PlayerState.ENDED) {
                 viewCount++;
                 document.getElementById('count').innerText = viewCount;
-                
-                // 模擬人類選歌空檔：45 到 150 秒
                 var waitTime = Math.floor(Math.random() * (150 - 45 + 1) + 45); 
                 document.getElementById('state').innerText = "擬人化冷卻中...";
-                
                 startCountdown(waitTime);
             }
         }
@@ -118,14 +112,11 @@
 
         function applyRandomSettings() {
             if (!player) return;
-            // 隨機倍速 (1.0x 或 1.05x)
             var rate = (Math.random() > 0.5) ? 1.0 : 1.05;
-            // 隨機音量 (65% ~ 95%)
             var vol = Math.floor(Math.random() * (95 - 65 + 1) + 65);
-            
             player.setPlaybackRate(rate);
             player.setVolume(vol);
-            addLog("⚙️ 模擬參數：倍速 " + rate + "x, 音量 " + vol + "%");
+            addLog("⚙️ 模擬參數：速率 " + rate + "x, 音量 " + vol + "%");
         }
 
         function onPlayerError(e) {
